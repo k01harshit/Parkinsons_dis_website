@@ -1,10 +1,15 @@
 import streamlit as st
 import numpy as np
 import joblib
+import os
 
-# Load model and scaler
-model = joblib.load("parkinsons_model.pkl")
-scaler = joblib.load("scaler.pkl")
+# Load model and scaler safely
+try:
+    model = joblib.load("parkinsons_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+except FileNotFoundError as e:
+    st.error(f"Missing file: {e.filename}")
+    st.stop()
 
 # Set up the page
 st.set_page_config(page_title="Parkinson's Predictor", page_icon="🧠", layout="centered")
@@ -23,25 +28,31 @@ features = {
     "PPE": "Nonlinear pitch variation"
 }
 
-# Layout for inputs
+# Input layout
 col1, col2 = st.columns(2)
 inputs = []
 
 for i, (label, help_text) in enumerate(features.items()):
-    value = (col1 if i % 2 == 0 else col2).number_input(label, help=help_text, format="%.5f")
+    value = (col1 if i % 2 == 0 else col2).number_input(
+        label, help=help_text, format="%.5f", value=0.0
+    )
     inputs.append(value)
 
 # Prediction
 if st.button("🔍 Predict"):
-    input_array = np.array([inputs])
-    input_scaled = scaler.transform(input_array)
-    prediction = model.predict(input_scaled)[0]
-    prob = model.predict_proba(input_scaled)[0][prediction]
+    try:
+        input_array = np.array([inputs])
+        input_scaled = scaler.transform(input_array)
+        prediction = model.predict(input_scaled)[0]
+        prob = model.predict_proba(input_scaled)[0][prediction]
 
-    st.markdown("---")
-    if prediction == 1:
-        st.error(f"🔴 Parkinson's Detected! Confidence: {prob * 100:.2f}%")
-        st.info("Please consult a medical expert for further testing.")
-    else:
-        st.success(f"🟢 No Parkinson's Detected! Confidence: {prob * 100:.2f}%")
-        st.balloons()
+        st.markdown("---")
+        if prediction == 1:
+            st.error(f"🔴 Parkinson's Detected! Confidence: {prob * 100:.2f}%")
+            st.info("Please consult a medical expert for further testing.")
+        else:
+            st.success(f"🟢 No Parkinson's Detected! Confidence: {prob * 100:.2f}%")
+            st.balloons()
+    except Exception as e:
+        st.error(f"⚠️ Error during prediction: {str(e)}")
+
