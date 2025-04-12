@@ -1,55 +1,64 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-import os
+import joblib
 
-st.set_page_config(page_title="Parkinson's Disease Prediction", layout="centered")
+# Set Streamlit page config
+st.set_page_config(page_title="Parkinson's Disease Predictor", layout="centered")
+
+# Title
 st.title("🧠 Parkinson's Disease Prediction App")
 
-@st.cache_data
-def load_data():
-    if os.path.exists("parkinsons.csv"):
-        return pd.read_csv("parkinsons.csv")
+# Description
+st.markdown("Provide the values for the following **7 voice features** to predict the likelihood of Parkinson’s Disease.")
+
+# Try loading model and scaler
+try:
+    model = joblib.load("model.pkl")  # Replace with your model path
+    scaler = joblib.load("scaler.pkl")
+except Exception as e:
+    model = None
+    scaler = None
+    st.warning("⚠️ Model or scaler not loaded. Prediction won't work without them.")
+
+# Define feature names and full forms
+features = {
+    'MDVP:Fo(Hz)': "Average vocal fundamental frequency",
+    'MDVP:Jitter(%)': "Variation in fundamental frequency",
+    'MDVP:Shimmer': "Variation in amplitude",
+    'NHR': "Noise-to-Harmonics Ratio",
+    'HNR': "Harmonics-to-Noise Ratio",
+    'RPDE': "Recurrence Period Density Entropy",
+    'DFA': "Detrended Fluctuation Analysis"
+}
+
+# Input form
+with st.form("parkinsons_form"):
+    user_input = []
+    for key, desc in features.items():
+        val = st.number_input(f"{key} ({desc})", min_value=0.0, step=0.01, format="%.4f")
+        user_input.append(val)
+    
+    submit = st.form_submit_button("🔍 Predict")
+
+# Prediction
+if submit:
+    if model is None or scaler is None:
+        st.error("❌ Model or Scaler not available. Please upload them.")
     else:
-        return None
+        input_array = np.array(user_input).reshape(1, -1)
+        input_scaled = scaler.transform(input_array)
+        prediction = model.predict(input_scaled)
 
-df = load_data()
+        if prediction[0] == 1:
+            st.error("🧬 The model predicts: **Parkinson’s Disease Detected.**")
+        else:
+            st.success("✅ The model predicts: **No Parkinson’s Disease Detected.**")
 
-# Upload fallback
-if df is None:
-    uploaded_file = st.file_uploader("Upload the 'parkinsons.csv' file", type=["csv"])
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
-        df.to_csv("parkinsons.csv", index=False)  # Save for future use
-        st.success("✅ File uploaded successfully!")
-    else:
-        st.warning("⚠️ Please upload the dataset to proceed.")
-        st.stop()
-
-# Continue if data is available
-features = ['MDVP:Fo(Hz)', 'MDVP:Jitter(%)', 'MDVP:Shimmer', 'NHR', 'HNR', 'RPDE', 'DFA']
-X = df[features]
-y = df['status']
-
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-model = LogisticRegression()
-model.fit(X_scaled, y)
-
-st.subheader("🔍 Enter Voice Feature Values")
-input_data = [st.number_input(f"{f}", format="%.5f") for f in features]
-
-if st.button("🧪 Predict"):
-    input_np = np.array(input_data).reshape(1, -1)
-    input_scaled = scaler.transform(input_np)
-    prediction = model.predict(input_scaled)[0]
-    prob = model.predict_proba(input_scaled)[0][prediction]
-
-    if prediction == 1:
-        st.error(f"🚨 Parkinson's Detected! (Confidence: {prob:.2f})")
-    else:
-        st.success(f"✅ No Parkinson's Detected. (Confidence: {prob:.2f})")
+# Optionally: Upload CSV and show structure
+st.sidebar.header("🗂️ Upload CSV (optional)")
+uploaded_file = st.sidebar.file_uploader("Upload a Parkinson's dataset CSV", type=["csv"])
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    df.columns = df.columns.str.strip()  # Clean up column names
+    st.sidebar.write("📊 CSV Columns:", df.columns.tolist())
