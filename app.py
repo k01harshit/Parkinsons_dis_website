@@ -46,7 +46,7 @@ if st.button("🔍 Predict"):
 Confidence: **{probability * 100:.2f}%**")
         st.info("Please consult a medical professional for further diagnosis and treatment options.")
     else:
-        st.success(f"🟢 **No Parkinson's Detected**
+        st.success(f"🟢 **No Parkinson's Detected**)
 
 Confidence: **{probability * 100:.2f}%**")
         st.balloons()
