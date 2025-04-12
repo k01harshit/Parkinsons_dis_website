@@ -1,106 +1,112 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import joblib
 import os
 
-# Check if required files exist
+# ----------- Setup: Load model and scaler -----------
 if not os.path.exists("best_model.pkl") or not os.path.exists("scaler.pkl"):
-    st.error("❌ Required model or preprocessing files not found. Please ensure 'best_model.pkl' and 'scaler.pkl' are in the same directory.")
+    st.error("❌ Required files not found. Ensure 'best_model.pkl' and 'scaler.pkl' are in the app directory.")
     st.stop()
 
-# Load model and scaler
 model = joblib.load("best_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
-# Streamlit page config
-st.set_page_config(page_title="Parkinson's Disease Predictor", layout="centered")
+# ----------- Page Configuration -----------
+st.set_page_config(page_title="🧠 Parkinson's Prediction", layout="centered")
 
-# Toggle theme
-dark_mode = st.toggle("🌙 Dark Mode", value=True)
-
-# Apply CSS styling
+# ----------- Mode Toggle -----------
 st.markdown(
-    f"""
+    """
     <style>
-        body {{
-            background-color: {'#0e1117' if dark_mode else '#ffffff'};
-            color: {'#f5f6fa' if dark_mode else '#000000'};
-        }}
-        .stTextInput > div > div > input {{
-            border-radius: 10px;
-            padding: 8px;
-        }}
-        .stButton>button {{
-            background-color: {'#4CAF50' if dark_mode else '#2c3e50'};
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 10px 20px;
-            font-size: 16px;
-            margin-top: 10px;
-        }}
+        .dark-mode { background-color: #121212; color: #FFFFFF; }
+        .light-mode { background-color: #FFFFFF; color: #000000; }
+        .centered { text-align: center; }
+        .input-label { font-weight: 600; font-size: 16px; margin-bottom: 5px; }
+        .main-block { background-color: rgba(255,255,255,0.07); padding: 2rem; border-radius: 15px; box-shadow: 0 0 10px rgba(0,0,0,0.2); }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# App title and instructions
-st.title("🧠 Parkinson's Disease Prediction App")
-st.markdown("Enter your medical voice parameters below to check the likelihood of having Parkinson's Disease.")
+dark_mode = st.toggle("🌗 Toggle Dark Mode", value=True)
+page_mode = "dark-mode" if dark_mode else "light-mode"
 
-# Full feature names
-feature_names = {
+st.markdown(f'<div class="{page_mode}">', unsafe_allow_html=True)
+
+# ----------- Header -----------
+st.markdown(f"""
+<div class="centered">
+    <h1>🧠 Parkinson's Disease Predictor</h1>
+    <h4>Enter your voice and neuromotor biometrics to check Parkinson's risk</h4>
+</div>
+""", unsafe_allow_html=True)
+
+# ----------- Feature Metadata -----------
+feature_labels = {
     'MDVP:Fo(Hz)': 'Average Vocal Fundamental Frequency',
+    'MDVP:Fhi(Hz)': 'Maximum Vocal Fundamental Frequency',
+    'MDVP:Flo(Hz)': 'Minimum Vocal Fundamental Frequency',
     'MDVP:Jitter(%)': 'Frequency Variation (Jitter)',
+    'MDVP:Jitter(Abs)': 'Absolute Jitter',
+    'MDVP:RAP': 'Relative Amplitude Perturbation',
+    'MDVP:PPQ': 'Pitch Perturbation Quotient',
+    'Jitter:DDP': 'Three-point Period Perturbation Quotient',
     'MDVP:Shimmer': 'Amplitude Variation (Shimmer)',
+    'MDVP:Shimmer(dB)': 'Shimmer in Decibels',
+    'Shimmer:APQ3': 'Amplitude Perturbation Quotient 3',
+    'Shimmer:APQ5': 'Amplitude Perturbation Quotient 5',
+    'MDVP:APQ': 'Average Amplitude Perturbation Quotient',
+    'Shimmer:DDA': 'Difference of Differences of Amplitude',
     'NHR': 'Noise-to-Harmonics Ratio',
     'HNR': 'Harmonics-to-Noise Ratio',
     'RPDE': 'Recurrence Period Density Entropy',
     'DFA': 'Detrended Fluctuation Analysis',
-    'spread1': 'Non-linear measure of fundamental frequency variation',
+    'spread1': 'Non-linear measure of F0 variation',
     'spread2': 'Non-linear measure of amplitude variation',
-    'PPE': 'Pitch Period Entropy',
-    'MDVP:APQ': 'Amplitude Perturbation Quotient',
-    'MDVP:PPQ': 'Pitch Perturbation Quotient',
-    'MDVP:RAP': 'Relative Amplitude Perturbation',
-    'D2': 'Correlation dimension',
-    'MDVP:Fhi(Hz)': 'Maximum Vocal Fundamental Frequency',
-    'MDVP:Flo(Hz)': 'Minimum Vocal Fundamental Frequency'
+    'D2': 'Correlation Dimension',
+    'PPE': 'Pitch Period Entropy'
 }
 
-# Top 7 required features
-required_features = [
-    'MDVP:Fo(Hz)', 'MDVP:Jitter(%)', 'MDVP:Shimmer',
-    'NHR', 'HNR', 'RPDE', 'DFA'
-]
+required_features = ['MDVP:Fo(Hz)', 'MDVP:Jitter(%)', 'MDVP:Shimmer', 'NHR', 'HNR', 'RPDE', 'DFA']
+optional_features = [f for f in feature_labels if f not in required_features]
 
-# Optional features
-optional_features = [f for f in feature_names if f not in required_features]
+user_inputs = {}
 
-user_data = {}
+# ----------- Input Form -----------
+with st.form("prediction_form"):
+    st.markdown('<div class="main-block">', unsafe_allow_html=True)
+    st.subheader("🔹 Required Inputs")
+    for feat in required_features:
+        user_inputs[feat] = st.number_input(
+            f"{feature_labels[feat]} ({feat})", format="%.5f", key=feat
+        )
 
-st.subheader("🔹 Required Inputs (Mandatory)")
-for feat in required_features:
-    val = st.number_input(f"{feature_names[feat]} ({feat})", format="%.5f", key=feat)
-    user_data[feat] = val
+    st.subheader("🔸 Optional Inputs (leave blank if unknown)")
+    for feat in optional_features:
+        val = st.text_input(f"{feature_labels[feat]} ({feat})", key=feat)
+        try:
+            user_inputs[feat] = float(val) if val else 0.0
+        except ValueError:
+            st.warning(f"⚠️ Please enter a valid number for {feat}")
+            st.stop()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-st.subheader("🔸 Optional Inputs")
-for feat in optional_features:
-    val = st.number_input(f"{feature_names[feat]} ({feat})", format="%.5f", key=feat)
-    user_data[feat] = val
+    submit = st.form_submit_button("🧪 Predict Now")
 
-# Prediction
-if st.button("🧪 Predict"):
+# ----------- Prediction Logic -----------
+if submit:
     try:
-        input_array = np.array([user_data[feat] for feat in feature_names])
+        input_array = np.array([user_inputs[feat] for feat in feature_labels])
         input_scaled = scaler.transform([input_array])
         prediction = model.predict(input_scaled)[0]
 
-        st.success("✅ Prediction complete!")
+        st.markdown("---")
         if prediction == 1:
             st.error("⚠️ The model predicts that the patient **may have Parkinson's Disease**.")
         else:
-            st.success("🎉 The model predicts that the patient **does not have Parkinson's Disease**.")
+            st.success("✅ The model predicts that the patient **does not have Parkinson's Disease**.")
+
     except Exception as e:
-        st.error(f"An error occurred during prediction: {e}")
+        st.error(f"❌ Error during prediction: {e}")
+
+st.markdown("</div>", unsafe_allow_html=True)
