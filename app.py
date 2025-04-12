@@ -1,64 +1,56 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
 import joblib
 
-# Set Streamlit page config
-st.set_page_config(page_title="Parkinson's Disease Predictor", layout="centered")
-
-# Title
-st.title("🧠 Parkinson's Disease Prediction App")
-
-# Description
-st.markdown("Provide the values for the following **7 voice features** to predict the likelihood of Parkinson’s Disease.")
-
-# Try loading model and scaler
-try:
-    model = joblib.load("model.pkl")  # Replace with your model path
+# Load model and scaler
+@st.cache_resource
+def load_model_scaler():
+    model = joblib.load("model.pkl")
     scaler = joblib.load("scaler.pkl")
-except Exception as e:
-    model = None
-    scaler = None
-    st.warning("⚠️ Model or scaler not loaded. Prediction won't work without them.")
+    return model, scaler
 
-# Define feature names and full forms
-features = {
-    'MDVP:Fo(Hz)': "Average vocal fundamental frequency",
-    'MDVP:Jitter(%)': "Variation in fundamental frequency",
-    'MDVP:Shimmer': "Variation in amplitude",
-    'NHR': "Noise-to-Harmonics Ratio",
-    'HNR': "Harmonics-to-Noise Ratio",
-    'RPDE': "Recurrence Period Density Entropy",
-    'DFA': "Detrended Fluctuation Analysis"
+model, scaler = load_model_scaler()
+
+# Full-form features to show nicely
+feature_labels = {
+    "MDVP:Fo(Hz)": "Average vocal fundamental frequency (Hz)",
+    "MDVP:Jitter(%)": "Variation in vocal frequency (Jitter %)",
+    "MDVP:Shimmer": "Variation in vocal amplitude (Shimmer)",
+    "NHR": "Noise-to-Harmonics Ratio",
+    "HNR": "Harmonics-to-Noise Ratio",
+    "RPDE": "Recurrence Period Density Entropy",
+    "DFA": "Detrended Fluctuation Analysis"
 }
 
+st.title("🧠 Parkinson's Disease Prediction App")
+
+st.markdown(
+    """
+    Enter the following **voice measurements** to check whether the person is likely to have **Parkinson's disease**.
+    """
+)
+
 # Input form
-with st.form("parkinsons_form"):
-    user_input = []
-    for key, desc in features.items():
-        val = st.number_input(f"{key} ({desc})", min_value=0.0, step=0.01, format="%.4f")
-        user_input.append(val)
-    
-    submit = st.form_submit_button("🔍 Predict")
+with st.form("input_form"):
+    inputs = {}
+    for key, label in feature_labels.items():
+        inputs[key] = st.number_input(f"{label} ({key})", step=0.01, format="%.4f")
 
-# Prediction
-if submit:
-    if model is None or scaler is None:
-        st.error("❌ Model or Scaler not available. Please upload them.")
-    else:
-        input_array = np.array(user_input).reshape(1, -1)
-        input_scaled = scaler.transform(input_array)
-        prediction = model.predict(input_scaled)
+    submitted = st.form_submit_button("Predict")
 
-        if prediction[0] == 1:
-            st.error("🧬 The model predicts: **Parkinson’s Disease Detected.**")
+if submitted:
+    input_values = np.array(list(inputs.values())).reshape(1, -1)
+
+    # Scale and Predict
+    try:
+        input_scaled = scaler.transform(input_values)
+        prediction = model.predict(input_scaled)[0]
+        probability = model.predict_proba(input_scaled)[0][1]
+
+        if prediction == 1:
+            st.error(f"🧪 The person **may have Parkinson's Disease**. (Confidence: {probability:.2%})")
         else:
-            st.success("✅ The model predicts: **No Parkinson’s Disease Detected.**")
+            st.success(f"✅ The person is **unlikely to have Parkinson's Disease**. (Confidence: {1 - probability:.2%})")
 
-# Optionally: Upload CSV and show structure
-st.sidebar.header("🗂️ Upload CSV (optional)")
-uploaded_file = st.sidebar.file_uploader("Upload a Parkinson's dataset CSV", type=["csv"])
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    df.columns = df.columns.str.strip()  # Clean up column names
-    st.sidebar.write("📊 CSV Columns:", df.columns.tolist())
+    except Exception as e:
+        st.error(f"An error occurred during prediction: {e}")
