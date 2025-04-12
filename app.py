@@ -6,47 +6,42 @@ import joblib
 model = joblib.load("parkinsons_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
+# Set up the page
 st.set_page_config(page_title="Parkinson's Predictor", page_icon="🧠", layout="centered")
 st.markdown("<h1 style='text-align: center;'>🧠 Parkinson's Disease Predictor</h1>", unsafe_allow_html=True)
-st.write("Enter the following key voice features to predict the likelihood of Parkinson's Disease.")
+st.markdown("<p style='text-align: center;'>Predict the likelihood of Parkinson's disease based on key voice features.</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-# Selected top features
+# Top 7 most important features
 features = {
-    "MDVP:Fo(Hz)": "Average vocal fundamental frequency",
-    "MDVP:Jitter(%)": "Variation in pitch (jitter)",
+    "MDVP:Fo(Hz)": "Average vocal frequency",
+    "MDVP:Jitter(%)": "Pitch variation (jitter)",
     "MDVP:Shimmer": "Amplitude variation (shimmer)",
     "HNR": "Harmonics-to-noise ratio",
-    "RPDE": "Signal complexity (RPDE)",
-    "DFA": "Signal fractal scaling exponent (DFA)",
-    "PPE": "Non-linear variation in pitch (PPE)"
+    "RPDE": "Recurrence period density entropy",
+    "DFA": "Fractal scaling exponent",
+    "PPE": "Nonlinear pitch variation"
 }
 
-# Layout in two columns
+# Layout for inputs
 col1, col2 = st.columns(2)
 inputs = []
 
-for i, (feature, desc) in enumerate(features.items()):
-    if i % 2 == 0:
-        value = col1.number_input(f"{feature}", help=desc, format="%.5f")
-    else:
-        value = col2.number_input(f"{feature}", help=desc, format="%.5f")
+for i, (label, help_text) in enumerate(features.items()):
+    value = (col1 if i % 2 == 0 else col2).number_input(label, help=help_text, format="%.5f")
     inputs.append(value)
 
-# Predict
+# Prediction
 if st.button("🔍 Predict"):
     input_array = np.array([inputs])
     input_scaled = scaler.transform(input_array)
     prediction = model.predict(input_scaled)[0]
-    probability = model.predict_proba(input_scaled)[0][prediction]
+    prob = model.predict_proba(input_scaled)[0][prediction]
 
     st.markdown("---")
     if prediction == 1:
-        st.error(f"🔴 **Parkinson's Detected**
-
-Confidence: **{probability * 100:.2f}%**")
-        st.info("Please consult a medical professional for further diagnosis and treatment options.")
+        st.error(f"🔴 Parkinson's Detected! Confidence: {prob * 100:.2f}%")
+        st.info("Please consult a medical expert for further testing.")
     else:
-        st.success(f"🟢 **No Parkinson's Detected**)
-
-Confidence: **{probability * 100:.2f}%**")
+        st.success(f"🟢 No Parkinson's Detected! Confidence: {prob * 100:.2f}%")
         st.balloons()
