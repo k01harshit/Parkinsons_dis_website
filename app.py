@@ -4,7 +4,10 @@ import joblib
 import os
 from sklearn.preprocessing import StandardScaler
 
-# Safe loading with fallback
+# ✅ MUST be the first Streamlit command
+st.set_page_config(page_title="Parkinson's Predictor", page_icon="🧠", layout="centered")
+
+# --- Model and Scaler Loaders ---
 def load_model(path):
     if os.path.exists(path):
         return joblib.load(path)
@@ -18,21 +21,18 @@ def load_scaler(path, feature_count):
         if hasattr(scaler, "transform"):
             return scaler
         else:
-            st.warning("⚠️ Invalid scaler detected. Using a fake one for testing.")
+            st.warning("⚠️ Invalid scaler detected. Using a dummy one.")
     else:
-        st.warning("⚠️ Scaler file not found. Using a fake scaler for testing.")
-    
-    # Create a dummy scaler (does nothing)
+        st.warning("⚠️ Scaler file not found. Using a dummy scaler for testing.")
+
+    # Return dummy scaler
     fake_scaler = StandardScaler()
     fake_scaler.mean_ = np.zeros(feature_count)
     fake_scaler.scale_ = np.ones(feature_count)
     fake_scaler.var_ = np.ones(feature_count)
     return fake_scaler
 
-# Load model and scaler
-model = load_model("parkinsons_model.pkl")
-
-# Define features first
+# --- Define Features ---
 features = {
     "MDVP:Fo(Hz)": "Average vocal frequency",
     "MDVP:Jitter(%)": "Pitch variation (jitter)",
@@ -43,15 +43,15 @@ features = {
     "PPE": "Nonlinear pitch variation"
 }
 
+# --- Load Model and Scaler ---
+model = load_model("parkinsons_model.pkl")
 scaler = load_scaler("scaler.pkl", feature_count=len(features))
 
-# Set up the page
-st.set_page_config(page_title="Parkinson's Predictor", page_icon="🧠", layout="centered")
+# --- UI Layout ---
 st.markdown("<h1 style='text-align: center;'>🧠 Parkinson's Disease Predictor</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>Predict the likelihood of Parkinson's disease based on key voice features.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Input layout
 col1, col2 = st.columns(2)
 inputs = []
 
@@ -61,7 +61,7 @@ for i, (label, help_text) in enumerate(features.items()):
     )
     inputs.append(value)
 
-# Prediction
+# --- Predict ---
 if st.button("🔍 Predict"):
     try:
         input_array = np.array([inputs])
@@ -78,5 +78,3 @@ if st.button("🔍 Predict"):
             st.balloons()
     except Exception as e:
         st.error(f"⚠️ Error during prediction: {str(e)}")
-
-
