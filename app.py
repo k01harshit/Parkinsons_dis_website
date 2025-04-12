@@ -1,80 +1,54 @@
 import streamlit as st
+import pandas as pd
 import numpy as np
-import joblib
-import os
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
-# ✅ MUST be the first Streamlit command
-st.set_page_config(page_title="Parkinson's Predictor", page_icon="🧠", layout="centered")
+# Load dataset
+@st.cache_data
+def load_data():
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/parkinsons/parkinsons.data"
+    df = pd.read_csv(url)
+    return df
 
-# --- Model and Scaler Loaders ---
-def load_model(path):
-    if os.path.exists(path):
-        return joblib.load(path)
-    else:
-        st.error(f"❌ File not found: {path}")
-        st.stop()
+df = load_data()
 
-def load_scaler(path, feature_count):
-    if os.path.exists(path):
-        scaler = joblib.load(path)
-        if hasattr(scaler, "transform"):
-            return scaler
-        else:
-            st.warning("⚠️ Invalid scaler detected. Using a dummy one.")
-    else:
-        st.warning("⚠️ Scaler file not found. Using a dummy scaler for testing.")
+# Selected features and target
+selected_features = ['MDVP:Fo(Hz)', 'MDVP:Jitter(%)', 'MDVP:Shimmer',
+                     'NHR', 'HNR', 'RPDE', 'DFA']
+X = df[selected_features]
+y = df['status']
 
-    # Return dummy scaler
-    fake_scaler = StandardScaler()
-    fake_scaler.mean_ = np.zeros(feature_count)
-    fake_scaler.scale_ = np.ones(feature_count)
-    fake_scaler.var_ = np.ones(feature_count)
-    return fake_scaler
+# Scale and split
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-# --- Define Features ---
-features = {
-    "MDVP:Fo(Hz)": "Average vocal frequency",
-    "MDVP:Jitter(%)": "Pitch variation (jitter)",
-    "MDVP:Shimmer": "Amplitude variation (shimmer)",
-    "HNR": "Harmonics-to-noise ratio",
-    "RPDE": "Recurrence period density entropy",
-    "DFA": "Fractal scaling exponent",
-    "PPE": "Nonlinear pitch variation"
-}
+# Train model
+model = RandomForestClassifier(random_state=42)
+model.fit(X_train, y_train)
 
-# --- Load Model and Scaler ---
-model = load_model("parkinsons_model.pkl")
-scaler = load_scaler("scaler.pkl", feature_count=len(features))
+# Title
+st.title("🧠 Parkinson's Disease Prediction (No .pkl files)")
+st.markdown("Enter your voice measurement parameters:")
 
-# --- UI Layout ---
-st.markdown("<h1 style='text-align: center;'>🧠 Parkinson's Disease Predictor</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>Predict the likelihood of Parkinson's disease based on key voice features.</p>", unsafe_allow_html=True)
-st.markdown("---")
+# Input fields
+fo = st.number_input("1. MDVP:Fo(Hz) – Average vocal fundamental frequency", 50.0, 300.0, 150.0)
+jitter = st.number_input("2. MDVP:Jitter(%) – Frequency variation", 0.0, 1.0, 0.005)
+shimmer = st.number_input("3. MDVP:Shimmer – Amplitude variation", 0.0, 1.0, 0.03)
+nhr = st.number_input("4. NHR – Noise-to-harmonics ratio", 0.0, 1.0, 0.02)
+hnr = st.number_input("5. HNR – Harmonics-to-noise ratio", 0.0, 50.0, 20.0)
+rpde = st.number_input("6. RPDE – Recurrence Period Density Entropy", 0.0, 1.0, 0.5)
+dfa = st.number_input("7. DFA – Detrended Fluctuation Analysis", 0.0, 2.0, 0.7)
 
-col1, col2 = st.columns(2)
-inputs = []
-
-for i, (label, help_text) in enumerate(features.items()):
-    value = (col1 if i % 2 == 0 else col2).number_input(
-        label, help=help_text, format="%.5f", value=0.0
-    )
-    inputs.append(value)
-
-# --- Predict ---
+# Predict
 if st.button("🔍 Predict"):
-    try:
-        input_array = np.array([inputs])
-        input_scaled = scaler.transform(input_array)
-        prediction = model.predict(input_scaled)[0]
-        prob = model.predict_proba(input_scaled)[0][prediction]
+    user_input = np.array([[fo, jitter, shimmer, nhr, hnr, rpde, dfa]])
+    user_scaled = scaler.transform(user_input)
+    prediction = model.predict(user_scaled)[0]
 
-        st.markdown("---")
-        if prediction == 1:
-            st.error(f"🔴 Parkinson's Detected! Confidence: {prob * 100:.2f}%")
-            st.info("Please consult a medical expert for further testing.")
-        else:
-            st.success(f"🟢 No Parkinson's Detected! Confidence: {prob * 100:.2f}%")
-            st.balloons()
-    except Exception as e:
-        st.error(f"⚠️ Error during prediction: {str(e)}")
+    if prediction == 1:
+        st.error("⚠️ Likely Parkinson's Disease")
+    else:
+        st.success("✅ Unlikely to Have Parkinson's Disease")
